@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Fathare Bot Rewards</title>
+<script src="https://telegram.org/js/telegram-web-app.js?63"></script>
+<script src="//libtl.com/sdk.js" data-zone="11528187" data-sdk="show_11528187"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:20px;font-family:Arial,sans-serif;background:#f4f7fb;color:#1f2937;text-align:center}
+.card{max-width:520px;margin:18px auto;background:#fff;border-radius:20px;padding:24px;box-shadow:0 10px 30px rgba(0,0,0,.08)}
+h1{margin:0 0 8px;font-size:32px}
+.muted{color:#6b7280;margin-bottom:18px}
+.balance{background:#eef6ff;border-radius:16px;padding:18px;margin:14px 0}
+.balance .num{font-size:40px;font-weight:700;margin-top:6px}
+button{width:100%;border:0;border-radius:14px;padding:15px;margin-top:12px;font-size:17px;cursor:pointer}
+#adBtn{background:#1687f7;color:#fff}
+#redeemBtn{background:#16a34a;color:#fff}
+#closeBtn{background:#e9eef3;color:#222}
+button:disabled{opacity:.6;cursor:not-allowed}
+#status{margin-top:14px;min-height:24px;font-weight:600;line-height:1.6}
+.small{font-size:13px;color:#6b7280;line-height:1.6;margin-top:16px}
+</style>
+</head>
+<body>
+<div class="card">
+<h1>🤖 Fathare Bot</h1>
+<div class="muted">شاهد الإعلان واجمع النقاط</div>
+<div class="balance">
+<div>رصيدك الحالي</div>
+<div class="num"><span id="points">0</span> ⭐</div>
+<div>كل إعلان مؤكد = 10 نقاط</div>
+</div>
+<button id="adBtn" disabled>🎁 شاهد الإعلان واربح 10 نقاط</button>
+<button id="redeemBtn">💳 استبدال النقاط</button>
+<button id="closeBtn">إغلاق التطبيق</button>
+<div id="status">⏳ جاري تحميل رصيدك...</div>
+<div class="small">يتم حفظ الرصيد على حساب Telegram والتحقق من المكافأة على الخادم قبل إضافة النقاط.</div>
+</div>
+<script>
+const tg=window.Telegram?.WebApp;
+if(tg){tg.ready();tg.expand();}
+
+const pointsEl=document.getElementById('points');
+const adBtn=document.getElementById('adBtn');
+const redeemBtn=document.getElementById('redeemBtn');
+const closeBtn=document.getElementById('closeBtn');
+const status=document.getElementById('status');
+let currentPoints=0;
+
+function setStatus(t){status.textContent=t;}
+function setPoints(v){currentPoints=Number(v||0);pointsEl.textContent=currentPoints;}
+
+async function apiBalance(){
+  if(!tg?.initData) throw new Error('افتح التطبيق من داخل Telegram.');
+  const r=await fetch('/.netlify/functions/balance',{
+    method:'POST',
+    headers:{'content-type':'application/json'},
+    body:JSON.stringify({initData:tg.initData})
+  });
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(data.error||'تعذر تحميل الرصيد.');
+  setPoints(data.points);
+  return Number(data.points||0);
+}
+
+async function initialize(){
+  try{
+    await apiBalance();
+    adBtn.disabled=false;
+    setStatus('✅ تم تحميل رصيدك من الخادم.');
+  }catch(e){
+    console.error(e);
+    setStatus('❌ '+(e.message||'تعذر الاتصال بالخادم.'));
+  }
+}
+
+async function waitForVerifiedReward(before){
+  for(let i=0;i<15;i++){
+    await new Promise(r=>setTimeout(r,2000));
+    try{
+      const now=await apiBalance();
+      if(now>=before+10) return true;
+    }catch(e){console.error(e);}
+  }
+  return false;
+}
+
+adBtn.onclick=async()=>{
+  adBtn.disabled=true;
+  setStatus('⏳ جاري تحميل الإعلان...');
+  try{
+    if(typeof window.show_11528187!=='function') throw new Error('Monetag SDK not loaded');
+    const userId=tg?.initDataUnsafe?.user?.id;
+    if(!userId) throw new Error('تعذر قراءة مستخدم Telegram.');
+
+    const before=currentPoints;
+    const nonce=(crypto.randomUUID?crypto.randomUUID():`${Date.now()}_${Math.random().toString(16).slice(2)}`);
+    const ymid=`fathare_${userId}_${nonce}`;
+
+    await window.show_11528187({ymid,requestVar:'reward_10_points'});
+    setStatus('⏳ تم إكمال الإعلان. جاري التحقق من Monetag وإضافة النقاط...');
+
+    const verified=await waitForVerifiedReward(before);
+    if(verified){
+      setStatus('✅ تم تأكيد الإعلان وإضافة 10 نقاط.');
+      if(tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+    }else{
+      setStatus('ℹ️ الإعلان اكتمل، لكن تأكيد Monetag لم يصل بعد. افتح التطبيق بعد قليل وسيظهر الرصيد تلقائيًا.');
+    }
+  }catch(e){
+    console.error(e);
+    setStatus('❌ لم يكتمل الإعلان أو لا يوجد إعلان متاح الآن.');
+  }finally{
+    adBtn.disabled=false;
+  }
+};
+
+redeemBtn.onclick=()=>{
+  if(currentPoints<100){
+    setStatus(`ℹ️ تحتاج 100 نقطة على الأقل للاستبدال. رصيدك الآن ${currentPoints}.`);
+    return;
+  }
+  setStatus('✅ وصلت للحد الأدنى. تواصل مع إدارة البوت لإتمام الاستبدال.');
+};
+
+closeBtn.onclick=()=>{if(tg)tg.close();};
+initialize();
+</script>
+</body>
+</html>
