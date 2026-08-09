@@ -27,7 +27,7 @@ export default async (request) => {
     }
 
     // لا نضيف نقاط إلا للإعلان المدفوع المؤكد
-    if (rewardEventType !== "yes") {
+    if (rewardEventType !== "valued") {
       return new Response("Ignored", { status: 200 });
     }
 
