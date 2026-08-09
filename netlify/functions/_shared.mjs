@@ -6,7 +6,9 @@ export function json(data, status=200){
 
 export function getEnv(){
   const SUPABASE_URL=process.env.SUPABASE_URL;
-  const SUPABASE_SECRET_KEY=process.env.SUPABASE_SECRET_KEY;
+  const SUPABASE_SECRET_KEY =
+  process.env.SUPABASE_SECRET_KEY ||
+  process.env.SUPABASE_SERVICE_ROLE_KEY;
   const TELEGRAM_BOT_TOKEN=process.env.TELEGRAM_BOT_TOKEN;
   const MONETAG_POSTBACK_TOKEN=process.env.MONETAG_POSTBACK_TOKEN;
   if(!SUPABASE_URL||!SUPABASE_SECRET_KEY) throw new Error('Server configuration is incomplete.');
