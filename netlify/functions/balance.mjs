@@ -62,9 +62,57 @@ export function verifyTelegramInitData(initData, botToken, maxAgeSeconds=86400){
   if(!user?.id) throw new Error('Telegram user id is missing.');
   return user;
 }
-export const handler = async () => {
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ ok: true })
+export const handler = async (event) => {
+  const headers = {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store"
   };
+
+  if (event.httpMethod !== "POST") {
+    return {
+      statusCode: 405,
+      headers,
+      body: JSON.stringify({ error: "POST required" })
+    };
+  }
+
+  try {
+    const { TELEGRAM_BOT_TOKEN } = getEnv();
+
+    const body = JSON.parse(event.body || "{}");
+    const initData = body.initData;
+
+    if (!initData) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: "Missing Telegram initData" })
+      };
+    }
+
+    const user = verifyTelegramInitData(
+      initData,
+      TELEGRAM_BOT_TOKEN
+    );
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        ok: true,
+        telegramId: user.id
+      })
+    };
+
+  } catch (e) {
+    console.error(e);
+
+    return {
+      statusCode: 401,
+      headers,
+      body: JSON.stringify({
+        error: e.message || "Authentication failed"
+      })
+    };
+  }
 };
