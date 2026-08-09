@@ -95,12 +95,22 @@ export const handler = async (event) => {
       TELEGRAM_BOT_TOKEN
     );
 
+    const result = await supabaseRpc(
+      "get_or_create_user_points",
+      {
+        p_telegram_id: user.id
+      }
+    );
+
+    const points = Number(result ?? 0);
+
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
         ok: true,
-        telegramId: user.id
+        telegramId: user.id,
+        points
       })
     };
 
@@ -108,10 +118,10 @@ export const handler = async (event) => {
     console.error(e);
 
     return {
-      statusCode: 401,
+      statusCode: 500,
       headers,
       body: JSON.stringify({
-        error: e.message || "Authentication failed"
+        error: e.message || "Balance request failed"
       })
     };
   }
