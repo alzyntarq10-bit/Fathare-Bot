@@ -62,3 +62,9 @@ export function verifyTelegramInitData(initData, botToken, maxAgeSeconds=86400){
   if(!user?.id) throw new Error('Telegram user id is missing.');
   return user;
 }
+export const handler = async () => {
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ ok: true })
+  };
+};
