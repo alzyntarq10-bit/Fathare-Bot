@@ -7,8 +7,12 @@ export default async (request) => {
     const { MONETAG_POSTBACK_TOKEN } = getEnv();
 
     const token = url.searchParams.get("token");
-    const telegramId = url.searchParams.get("telegram_id");
+    let telegramId = url.searchParams.get("telegram_id");
     const ymid = url.searchParams.get("ymid");
+  if (!telegramId && ymid) {
+  const match = ymid.match(/^fathare_(\d+)_/);
+  if (match) telegramId = match[1];
+}
     const eventType = url.searchParams.get("event_type");
     const rewardEventType = url.searchParams.get("reward_event_type");
     const estimatedPrice =
