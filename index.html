@@ -117,14 +117,42 @@ adBtn.onclick=async()=>{
   }
 };
 
-redeemBtn.onclick=()=>{
-  if(currentPoints<100){
+redeemBtn.onclick = async () => {
+  if (currentPoints < 100) {
     setStatus(`ℹ️ تحتاج 100 نقطة على الأقل للاستبدال. رصيدك الآن ${currentPoints}.`);
     return;
   }
-  setStatus('✅ وصلت للحد الأدنى. تواصل مع إدارة البوت لإتمام الاستبدال.');
-};
 
+  try {
+    redeemBtn.disabled = true;
+    setStatus('⏳ جاري استبدال 100 نقطة...');
+
+    const initData = tg?.initData || '';
+
+    const res = await fetch('/.netlify/functions/redeem', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ initData })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || 'فشل الاستبدال');
+    }
+
+    currentPoints = Number(data.points ?? data.balance ?? currentPoints - 100);
+    pointsEl.textContent = currentPoints;
+
+    setStatus(`✅ تم استبدال 100 نقطة بنجاح. رصيدك الآن ${currentPoints} نقطة.`);
+  } catch (err) {
+    setStatus(`❌ فشل الاستبدال: ${err.message}`);
+  } finally {
+    redeemBtn.disabled = false;
+  }
+};
 closeBtn.onclick=()=>{if(tg)tg.close();};
 initialize();
 </script>
