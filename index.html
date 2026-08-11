@@ -116,10 +116,16 @@ adBtn.onclick=async()=>{
     adBtn.disabled=false;
   }
 };
-
 redeemBtn.onclick = async () => {
   if (currentPoints < 100) {
     setStatus(`ℹ️ تحتاج 100 نقطة على الأقل للاستبدال. رصيدك الآن ${currentPoints}.`);
+    return;
+  }
+
+  const wallet_phone = prompt('أدخل رقم المحفظة للتحويل:');
+
+  if (!wallet_phone || !wallet_phone.trim()) {
+    setStatus('❌ يجب إدخال رقم المحفظة');
     return;
   }
 
@@ -134,7 +140,10 @@ redeemBtn.onclick = async () => {
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ initData })
+      body: JSON.stringify({
+        initData,
+        wallet_phone: wallet_phone.trim()
+      })
     });
 
     const data = await res.json();
@@ -143,16 +152,23 @@ redeemBtn.onclick = async () => {
       throw new Error(data.error || 'فشل الاستبدال');
     }
 
-    currentPoints = Number(data.points ?? data.balance ?? currentPoints - 100);
+    currentPoints = Number(
+      data.points ?? data.balance ?? data.result ?? currentPoints - 100
+    );
+
     pointsEl.textContent = currentPoints;
 
-    setStatus(`✅ تم استبدال 100 نقطة بنجاح. رصيدك الآن ${currentPoints} نقطة.`);
+    setStatus(
+      `✅ تم طلب استبدال 100 نقطة بقيمة 5 ريال. رصيدك الآن ${currentPoints} نقطة.`
+    );
+
   } catch (err) {
     setStatus(`❌ فشل الاستبدال: ${err.message}`);
   } finally {
     redeemBtn.disabled = false;
   }
 };
+
 closeBtn.onclick=()=>{if(tg)tg.close();};
 initialize();
 </script>
