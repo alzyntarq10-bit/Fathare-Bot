@@ -21,8 +21,8 @@ export const handler = async (event) => {
     const { TELEGRAM_BOT_TOKEN } = getEnv();
 
     const body = JSON.parse(event.body || "{}");
-    const initData = body.initData;
-
+    const initData = body.initData;  
+    const wallet_phone = String(body.wallet_phone || "").trim();
     if (!initData) {
       return {
         statusCode: 400,
