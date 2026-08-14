@@ -69,6 +69,42 @@ export default async function handler(req, res) {
   const userId = message.from?.id || chatId;
 
   if (text.startsWith("/start")) {
+   const parts = text.trim().split(/\s+/);
+const startParam = parts[1] || "";
+
+if (startParam.startsWith("ref_")) {
+  const referrerId = Number(startParam.replace("ref_", ""));
+
+  if (
+    Number.isFinite(referrerId) &&
+    referrerId > 0 &&
+    referrerId !== Number(userId)
+  ) {
+    const {
+      SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY
+    } = process.env;
+
+    if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+      await fetch(
+        `${SUPABASE_URL}/rest/v1/rpc/reward_referral`,
+        {
+          method: "POST",
+          headers: {
+            apikey: SUPABASE_SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            p_referrer_id: referrerId,
+            p_referred_id: Number(userId),
+            p_points: 50
+          })
+        }
+      );
+    }
+  }
+} 
     const referralLink =
       `https://t.me/Fathare_bot?start=ref_${userId}`;
 
