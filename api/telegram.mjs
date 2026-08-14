@@ -21,12 +21,94 @@ export default async function handler(req, res) {
   }
 
   // =========================
+  // تسجيل القروبات تلقائيًا
+  // =========================
+  async function saveGroup(chat) {
+    if (
+      !chat?.id ||
+      !["group", "supergroup"].includes(chat.type) ||
+      !SUPABASE_URL ||
+      !SUPABASE_SERVICE_ROLE_KEY
+    ) {
+      return;
+    }
+
+    try {
+      await fetch(
+        `${SUPABASE_URL}/rest/v1/telegram_groups?on_conflict=chat_id`,
+        {
+          method: "POST",
+          headers: {
+            apikey: SUPABASE_SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            "Content-Type": "application/json",
+            Prefer: "resolution=merge-duplicates"
+          },
+          body: JSON.stringify({
+            chat_id: Number(chat.id),
+            title: chat.title || "Telegram Group",
+            is_active: true
+          })
+        }
+      );
+    } catch (error) {
+      console.error("Save group error:", error);
+    }
+  }
+
+  // لو تم تغيير حالة البوت داخل قروب
+  if (update?.my_chat_member?.chat) {
+    const chat = update.my_chat_member.chat;
+    const newStatus = update.my_chat_member?.new_chat_member?.status;
+
+    if (["group", "supergroup"].includes(chat.type)) {
+      if (
+        ["member", "administrator"].includes(newStatus)
+      ) {
+        await saveGroup(chat);
+      }
+
+      if (
+        ["left", "kicked"].includes(newStatus) &&
+        SUPABASE_URL &&
+        SUPABASE_SERVICE_ROLE_KEY
+      ) {
+        try {
+          await fetch(
+            `${SUPABASE_URL}/rest/v1/telegram_groups?chat_id=eq.${chat.id}`,
+            {
+              method: "PATCH",
+              headers: {
+                apikey: SUPABASE_SERVICE_ROLE_KEY,
+                Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                is_active: false
+              })
+            }
+          );
+        } catch (error) {
+          console.error(
+            "Disable group error:",
+            error
+          );
+        }
+      }
+    }
+
+    return res.status(200).json({ ok: true });
+  }
+
+  // =========================
   // زر "رابط دعوتي"
   // =========================
   if (update?.callback_query) {
     const callback = update.callback_query;
-    const callbackChatId = callback.message?.chat?.id;
-    const callbackUserId = callback.from?.id;
+    const callbackChatId =
+      callback.message?.chat?.id;
+    const callbackUserId =
+      callback.from?.id;
 
     if (
       callback.data === "my_referral_link" &&
@@ -83,20 +165,33 @@ export default async function handler(req, res) {
   const text = message.text || "";
   const userId = message.from?.id || chatId;
 
+  // لو وصلت رسالة من قروب، خزّنه
+  if (
+    ["group", "supergroup"].includes(
+      message.chat?.type
+    )
+  ) {
+    await saveGroup(message.chat);
+  }
+
   // =========================
   // أمر /start
   // =========================
   if (text.startsWith("/start")) {
-    const parts = text.trim().split(/\s+/);
-    const startParam = parts[1] || "";
+    const parts =
+      text.trim().split(/\s+/);
+
+    const startParam =
+      parts[1] || "";
 
     // =========================
     // معالجة رابط الإحالة
     // =========================
     if (startParam.startsWith("ref_")) {
-      const referrerId = Number(
-        startParam.replace("ref_", "")
-      );
+      const referrerId =
+        Number(
+          startParam.replace("ref_", "")
+        );
 
       if (
         Number.isFinite(referrerId) &&
@@ -108,31 +203,36 @@ export default async function handler(req, res) {
           SUPABASE_SERVICE_ROLE_KEY
         ) {
           try {
-            const referralResponse = await fetch(
-              `${SUPABASE_URL}/rest/v1/rpc/reward_referral`,
-              {
-                method: "POST",
-                headers: {
-                  apikey: SUPABASE_SERVICE_ROLE_KEY,
-                  Authorization:
-                    `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-                  "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                  p_referrer_id: referrerId,
-                  p_referred_id: Number(userId),
-                  p_points: 50
-                })
-              }
-            );
+            const referralResponse =
+              await fetch(
+                `${SUPABASE_URL}/rest/v1/rpc/reward_referral`,
+                {
+                  method: "POST",
+                  headers: {
+                    apikey:
+                      SUPABASE_SERVICE_ROLE_KEY,
+                    Authorization:
+                      `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                    "Content-Type":
+                      "application/json"
+                  },
+                  body: JSON.stringify({
+                    p_referrer_id:
+                      referrerId,
+                    p_referred_id:
+                      Number(userId),
+                    p_points: 50
+                  })
+                }
+              );
 
             if (referralResponse.ok) {
               const result =
                 await referralResponse.json();
 
-              const newBalance = Number(result);
+              const newBalance =
+                Number(result);
 
-              // -1 يعني أن الإحالة مكررة
               if (
                 Number.isFinite(newBalance) &&
                 newBalance !== -1
@@ -146,7 +246,8 @@ export default async function handler(req, res) {
                         "application/json"
                     },
                     body: JSON.stringify({
-                      chat_id: referrerId,
+                      chat_id:
+                        referrerId,
                       text:
                         "🎉 تمت دعوة صديق جديد بنجاح!\n\n" +
                         "⭐ تمت إضافة 50 نقطة إلى رصيدك.\n\n" +
@@ -174,21 +275,16 @@ export default async function handler(req, res) {
       }
     }
 
-    // =========================
-    // رابط دعوة المستخدم
-    // =========================
     const referralLink =
       `https://t.me/Fathare_bot?start=ref_${userId}`;
 
-    // =========================
-    // رسالة الترحيب
-    // =========================
     await fetch(
       `https://api.telegram.org/bot${token}/sendMessage`,
       {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type":
+            "application/json"
         },
         body: JSON.stringify({
           chat_id: chatId,
@@ -210,7 +306,8 @@ export default async function handler(req, res) {
               ],
               [
                 {
-                  text: "👥 ادعُ صديقًا",
+                  text:
+                    "👥 ادعُ صديقًا",
                   url:
                     "https://t.me/share/url?url=" +
                     encodeURIComponent(
@@ -224,7 +321,8 @@ export default async function handler(req, res) {
               ],
               [
                 {
-                  text: "🔗 رابط دعوتي",
+                  text:
+                    "🔗 رابط دعوتي",
                   callback_data:
                     "my_referral_link"
                 }
@@ -236,5 +334,7 @@ export default async function handler(req, res) {
     );
   }
 
-  return res.status(200).json({ ok: true });
+  return res.status(200).json({
+    ok: true
+  });
 }
