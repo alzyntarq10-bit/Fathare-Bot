@@ -4,7 +4,14 @@ export default async function handler(req, res) {
   }
 
   const update = req.body;
-  const token = process.env.TELEGRAM_BOT_TOKEN;
+
+  const {
+    TELEGRAM_BOT_TOKEN,
+    SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY
+  } = process.env;
+
+  const token = TELEGRAM_BOT_TOKEN;
 
   if (!token) {
     return res.status(500).json({
@@ -13,7 +20,9 @@ export default async function handler(req, res) {
     });
   }
 
+  // =========================
   // زر "رابط دعوتي"
+  // =========================
   if (update?.callback_query) {
     const callback = update.callback_query;
     const callbackChatId = callback.message?.chat?.id;
@@ -27,19 +36,22 @@ export default async function handler(req, res) {
       const referralLink =
         `https://t.me/Fathare_bot?start=ref_${callbackUserId}`;
 
-      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          chat_id: callbackChatId,
-          text:
-            "🔗 رابط دعوتك الخاص:\n\n" +
-            referralLink +
-            "\n\nأرسله لأصدقائك."
-        })
-      });
+      await fetch(
+        `https://api.telegram.org/bot${token}/sendMessage`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            chat_id: callbackChatId,
+            text:
+              "🔗 رابط دعوتك الخاص:\n\n" +
+              referralLink +
+              "\n\nأرسله لأصدقائك."
+          })
+        }
+      );
 
       await fetch(
         `https://api.telegram.org/bot${token}/answerCallbackQuery`,
@@ -58,6 +70,9 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true });
   }
 
+  // =========================
+  // استقبال الرسائل
+  // =========================
   const message = update?.message;
 
   if (!message?.chat?.id) {
@@ -68,89 +83,157 @@ export default async function handler(req, res) {
   const text = message.text || "";
   const userId = message.from?.id || chatId;
 
+  // =========================
+  // أمر /start
+  // =========================
   if (text.startsWith("/start")) {
-   const parts = text.trim().split(/\s+/);
-const startParam = parts[1] || "";
+    const parts = text.trim().split(/\s+/);
+    const startParam = parts[1] || "";
 
-if (startParam.startsWith("ref_")) {
-  const referrerId = Number(startParam.replace("ref_", ""));
-
-  if (
-    Number.isFinite(referrerId) &&
-    referrerId > 0 &&
-    referrerId !== Number(userId)
-  ) {
-    const {
-      SUPABASE_URL,
-      SUPABASE_SERVICE_ROLE_KEY
-    } = process.env;
-
-    if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
-      await fetch(
-        `${SUPABASE_URL}/rest/v1/rpc/reward_referral`,
-        {
-          method: "POST",
-          headers: {
-            apikey: SUPABASE_SERVICE_ROLE_KEY,
-            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            p_referrer_id: referrerId,
-            p_referred_id: Number(userId),
-            p_points: 50
-          })
-        }
+    // =========================
+    // معالجة رابط الإحالة
+    // =========================
+    if (startParam.startsWith("ref_")) {
+      const referrerId = Number(
+        startParam.replace("ref_", "")
       );
+
+      if (
+        Number.isFinite(referrerId) &&
+        referrerId > 0 &&
+        referrerId !== Number(userId)
+      ) {
+        if (
+          SUPABASE_URL &&
+          SUPABASE_SERVICE_ROLE_KEY
+        ) {
+          try {
+            const referralResponse = await fetch(
+              `${SUPABASE_URL}/rest/v1/rpc/reward_referral`,
+              {
+                method: "POST",
+                headers: {
+                  apikey: SUPABASE_SERVICE_ROLE_KEY,
+                  Authorization:
+                    `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                  p_referrer_id: referrerId,
+                  p_referred_id: Number(userId),
+                  p_points: 50
+                })
+              }
+            );
+
+            if (referralResponse.ok) {
+              const result =
+                await referralResponse.json();
+
+              const newBalance = Number(result);
+
+              // -1 يعني أن الإحالة مكررة
+              if (
+                Number.isFinite(newBalance) &&
+                newBalance !== -1
+              ) {
+                await fetch(
+                  `https://api.telegram.org/bot${token}/sendMessage`,
+                  {
+                    method: "POST",
+                    headers: {
+                      "Content-Type":
+                        "application/json"
+                    },
+                    body: JSON.stringify({
+                      chat_id: referrerId,
+                      text:
+                        "🎉 تمت دعوة صديق جديد بنجاح!\n\n" +
+                        "⭐ تمت إضافة 50 نقطة إلى رصيدك.\n\n" +
+                        `💰 رصيدك الحالي: ${newBalance} نقطة`
+                    })
+                  }
+                );
+              }
+            } else {
+              const referralError =
+                await referralResponse.text();
+
+              console.error(
+                "Referral RPC failed:",
+                referralError
+              );
+            }
+          } catch (error) {
+            console.error(
+              "Referral error:",
+              error
+            );
+          }
+        }
+      }
     }
-  }
-} 
+
+    // =========================
+    // رابط دعوة المستخدم
+    // =========================
     const referralLink =
       `https://t.me/Fathare_bot?start=ref_${userId}`;
 
-    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text:
-          "🎁 أهلاً بك في Fathare Bot\n\n" +
-          "شاهد الإعلانات واجمع النقاط ثم استبدل نقاطك.\n\n" +
-          "👥 يمكنك أيضًا دعوة أصدقائك من زر الدعوة.",
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: "🎁 شاهد الإعلان واربح نقاط",
-                web_app: {
-                  url: "https://sage-strudel-ec5210.netlify.app"
+    // =========================
+    // رسالة الترحيب
+    // =========================
+    await fetch(
+      `https://api.telegram.org/bot${token}/sendMessage`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text:
+            "🎁 أهلاً بك في Fathare Bot\n\n" +
+            "شاهد الإعلانات واجمع النقاط ثم استبدل نقاطك.\n\n" +
+            "👥 يمكنك أيضًا دعوة أصدقائك من زر الدعوة.",
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text:
+                    "🎁 شاهد الإعلان واربح نقاط",
+                  web_app: {
+                    url:
+                      "https://sage-strudel-ec5210.netlify.app"
+                  }
                 }
-              }
-            ],
-            [
-              {
-                text: "👥 ادعُ صديقًا",
-                url:
-                  "https://t.me/share/url?url=" +
-                  encodeURIComponent(referralLink) +
-                  "&text=" +
-                  encodeURIComponent(
-                    "🎁 انضم إلى Fathare Bot وشاهد الإعلانات واجمع النقاط"
-                  )
-              }
-            ],
-            [
-              {
-                text: "🔗 رابط دعوتي",
-                callback_data: "my_referral_link"
-              }
+              ],
+              [
+                {
+                  text: "👥 ادعُ صديقًا",
+                  url:
+                    "https://t.me/share/url?url=" +
+                    encodeURIComponent(
+                      referralLink
+                    ) +
+                    "&text=" +
+                    encodeURIComponent(
+                      "🎁 انضم إلى Fathare Bot وشاهد الإعلانات واجمع النقاط"
+                    )
+                }
+              ],
+              [
+                {
+                  text: "🔗 رابط دعوتي",
+                  callback_data:
+                    "my_referral_link"
+                }
+              ]
             ]
-          ]
-        }
-      })
-    });
+          }
+        })
+      }
+    );
   }
 
   return res.status(200).json({ ok: true });
