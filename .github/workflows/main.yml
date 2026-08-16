@@ -1,0 +1,15 @@
+name: Send Telegram Message Every 3 Hours
+
+on:
+  schedule:
+    - cron: "0 */3 * * *"
+  workflow_dispatch:
+
+jobs:
+  send-message:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send message
+        run: |
+          curl -X POST "${{ secrets.BROADCAST_URL }}"
