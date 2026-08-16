@@ -43,7 +43,7 @@ export default async function handler(req, res) {
 
     const groups = await groupsResponse.json();
 
-    const message =
+    constث message =
       "🎁 شاهد الإعلان واربح نقاط!\n\n" +
       "⭐ اجمع النقاط واستبدلها بالمكافآت.\n\n" +
       "👇 ابدأ الآن:\n" +
